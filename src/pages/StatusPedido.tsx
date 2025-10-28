@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { UtensilsCrossed, Loader2, AlertCircle } from "lucide-react";
+import { echo } from "@/lib/echo";
 
 interface OrderItem {
   id: string;
@@ -19,6 +20,11 @@ interface PublicOrder {
   status: string;
   total: string;
   itens: OrderItem[];
+}
+
+interface OrderStatusEvent {
+  id: number;
+  status: string;
 }
 
 const StatusPedido = () => {
@@ -44,6 +50,30 @@ const StatusPedido = () => {
     };
 
     fetchOrderStatus();
+    // 2. Se inscrever no canal do WebSocket (ex: 'order.UUID-DO-PEDIDO')
+    const channel = echo.channel(`order.${uuid}`);
+    
+    // 3. Ouvir pelo evento 'OrderStatusUpdated' (o nome da sua classe de Evento)
+    channel.listen('OrderStatusUpdated', (event: OrderStatusEvent) => {
+      console.log('Evento de status recebido!', event);
+ // 4. Atualizar o estado local com o novo status
+      setOrder((currentOrder) => {
+        // Verificamos se o pedido em tela é o mesmo do evento
+        if (currentOrder && currentOrder.id === event.id) {
+          // Retorna um novo objeto de estado com o status atualizado
+          return { ...currentOrder, status: event.status };
+        }
+        return currentOrder;
+      });
+    });
+
+    // 5. Função de limpeza: Quando o usuário sair da página,
+    // saímos do canal para não sobrecarregar o servidor.
+    return () => {
+      channel.stopListening('OrderStatusUpdated');
+      echo.leaveChannel(`order.${uuid}`);
+    };
+    
   }, [uuid]);
 
   const getStatusColor = (status: string) => {
