@@ -23,43 +23,47 @@ interface OrderResponse {
 }
 
 interface CartItem extends MenuItem {
+  
   quantity: number;
 }
 
 interface OrderFormProps {
-  menuItems: MenuItem[];
+  cart: CartItem[];
+  onUpdateQuantity: (id: string, delta: number) => void;
+  onRemoveFromCart: (id: string) => void;
+  onClearCart: () => void;
 }
 
-export function OrderForm({ menuItems }: OrderFormProps) {
+export function OrderForm({ cart, onUpdateQuantity, onRemoveFromCart, onClearCart }: OrderFormProps) {
   const { toast } = useToast();
-  const [cart, setCart] = useState<CartItem[]>([]);
   const [telefone, setTelefone] = useState(""); 
   const [endereco, setEndereco] = useState("");
   const [cliente, setCliente] = useState("");
   const [meioPagamento, setMeioPagamento] = useState("");
   const [loading, setLoading] = useState(false);
   const [submittedOrderUuid, setSubmittedOrderUuid] = useState<string | null>(null);
+  
 
-  const addToCart = (item: MenuItem) => {
-    const existing = cart.find(i => i.id === item.id);
-    if (existing) {
-      setCart(cart.map(i => 
-        i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
-      ));
-    } else {
-      setCart([...cart, { ...item, quantity: 1 }]);
-    }
-  };
+  // const addToCart = (item: MenuItem) => {
+  //   const existing = cart.find(i => i.id === item.id);
+  //   if (existing) {
+  //     setCart(cart.map(i => 
+  //       i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+  //     ));
+  //   } else {
+  //     setCart([...cart, { ...item, quantity: 1 }]);
+  //   }
+  // };
 
-  const updateQuantity = (id: string, delta: number) => {
-    setCart(cart.map(item => 
-      item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
-    ).filter(item => item.quantity > 0));
-  };
+  // const updateQuantity = (id: string, delta: number) => {
+  //   setCart(cart.map(item => 
+  //     item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
+  //   ).filter(item => item.quantity > 0));
+  // };
 
-  const removeFromCart = (id: string) => {
-    setCart(cart.filter(item => item.id !== id));
-  };
+  // const removeFromCart = (id: string) => {
+  //   setCart(cart.filter(item => item.id !== id));
+  // };
 
   const getTotal = () => {
     return cart.reduce((sum, item) => sum + parseFloat(item.price) * item.quantity, 0).toFixed(2);
@@ -104,8 +108,9 @@ export function OrderForm({ menuItems }: OrderFormProps) {
         description: "Seu pedido foi enviado com sucesso.",
       });
 
-      // Limpa o formulário
-      setCart([]);
+    onClearCart();
+      
+      // Limpa os campos locais
       setCliente("");
       setTelefone("");
       setEndereco("");
@@ -211,31 +216,12 @@ export function OrderForm({ menuItems }: OrderFormProps) {
               </Select>
             </div>
           </div>
+{/* <div className="border-t pt-4"> ... </div> */}
 
-          <div className="border-t pt-4">
-            <h3 className="font-semibold mb-3">Itens do Cardápio</h3>
-            <div className="grid gap-2 max-h-60 overflow-y-auto">
-              {menuItems.map((item) => (
-                <div key={item.id} className="flex justify-between items-center p-2 hover:bg-accent/50 rounded">
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-accent">R$ {item.price}</p>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => addToCart(item)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-
+          {/* A seção "Carrinho" agora usa os props */}
           {cart.length > 0 && (
             <div className="border-t pt-4 space-y-3">
-              <h3 className="font-semibold">Carrinho</h3>
+              <h3 className="font-semibold">Itens no Pedido:</h3>
               {cart.map((item) => (
                 <div key={item.id} className="flex justify-between items-center">
                   <span className="flex-1">{item.name}</span>
@@ -244,7 +230,7 @@ export function OrderForm({ menuItems }: OrderFormProps) {
                       type="button"
                       size="icon"
                       variant="outline"
-                      onClick={() => updateQuantity(item.id, -1)}
+                      onClick={() => onUpdateQuantity(item.id, -1)} // Usa prop
                     >
                       <Minus className="h-4 w-4" />
                     </Button>
@@ -253,7 +239,7 @@ export function OrderForm({ menuItems }: OrderFormProps) {
                       type="button"
                       size="icon"
                       variant="outline"
-                      onClick={() => updateQuantity(item.id, 1)}
+                      onClick={() => onUpdateQuantity(item.id, 1)} // Usa prop
                     >
                       <Plus className="h-4 w-4" />
                     </Button>
@@ -261,7 +247,7 @@ export function OrderForm({ menuItems }: OrderFormProps) {
                       type="button"
                       size="icon"
                       variant="ghost"
-                      onClick={() => removeFromCart(item.id)}
+                      onClick={() => onRemoveFromCart(item.id)} // Usa prop
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

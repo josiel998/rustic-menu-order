@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import heroImage from "@/assets/hero-restaurant.jpg";
 import { api } from "@/lib/api";
 import { echo } from "@/lib/echo";
+import { useToast } from "@/hooks/use-toast";
 
 // Interface dos dados vindos da API (Português)
 interface MenuItemFromDB {
@@ -15,6 +16,7 @@ interface MenuItemFromDB {
   preco: string;
   category: string;
   period: "lunch" | "dinner";
+  imagem_url?: string | null;
 }
 
 interface PratoCriadoEvent {
@@ -28,9 +30,58 @@ interface OrderFormItem {
   price: string;
 }
 
+interface CartItem {
+  id: string;
+  name: string;
+  price: string;
+  quantity: number;
+}
+
+interface PratoCriadoEvent { prato: MenuItemFromDB; }
+interface PratoUpdatedEvent { prato: MenuItemFromDB; }
+
+
 const Index = () => {
   const [menuItems, setMenuItems] = useState<MenuItemFromDB[]>([]);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const [cart, setCart] = useState<CartItem[]>([]);
+
+
+  const addToCart = (item: MenuItemFromDB) => {
+    const existing = cart.find(i => i.id === item.id);
+    
+    if (existing) {
+      setCart(cart.map(i => 
+        i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+      ));
+    } else {
+      // Traduz de Português (DB) para Inglês (Cart)
+      const cartItem: CartItem = {
+        id: item.id,
+        name: item.nome,
+        price: item.preco,
+        quantity: 1,
+      };
+      setCart([...cart, cartItem]);
+    }
+    toast({ title: "Item adicionado!", description: `${item.nome} foi para o carrinho.` });
+  };
+
+  const updateQuantity = (id: string, delta: number) => {
+    setCart(cart.map(item => 
+      item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
+    ).filter(item => item.quantity > 0)); // Remove se a quantidade for 0
+  };
+
+  const removeFromCart = (id: string) => {
+    setCart(cart.filter(item => item.id !== id));
+  };
+  
+  const clearCart = () => {
+    setCart([]);
+  };
 
   useEffect(() => {
     const fetchMenu = async () => {
@@ -50,20 +101,34 @@ const Index = () => {
     channel.listen('.PratoCriado', (event: PratoCriadoEvent) => {
       setMenuItems(pratosAtuais => [event.prato, ...pratosAtuais]);
     });
+   
+
+  channel.listen('.PratoUpdated', (event: PratoUpdatedEvent) => {
+      console.log('Index ouviu PratoUpdated', event.prato);
+      setMenuItems(pratosAtuais =>
+        pratosAtuais.map(item => 
+          item.id === event.prato.id ? event.prato : item // Substitui o item antigo
+        )
+      );
+    });
+
+    // 3. Limpeza
     return () => {
       channel.stopListening('.PratoCriado');
+      channel.stopListening('.PratoUpdated'); // NOVO
       echo.leave('pratos');
     };
+
   }, []);
+
+  
 
   const lunchMenu = menuItems.filter(item => item.period === 'lunch');
   const dinnerMenu = menuItems.filter(item => item.period === 'dinner');
-
-  // "Tradução" para o OrderForm
   const allMenuItemsForOrderForm: OrderFormItem[] = menuItems.map(item => ({
     id: item.id,
-    name: item.nome,  // Traduz 'nome' para 'name'
-    price: item.preco // Traduz 'preco' para 'price'
+    name: item.nome,
+    price: item.preco
   }));
 
   return (
@@ -98,43 +163,42 @@ const Index = () => {
                 <TabsTrigger value="dinner" className="text-lg">Jantar</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="lunch">
-                {lunchMenu.length === 0 && <p className="text-center text-muted-foreground">Nenhum prato de almoço.</p>}
-                <div className="grid md:grid-cols-2 gap-6">
-                  {/* 👇 CORREÇÃO AQUI: "Traduz" os props para o MenuCard 👇 */}
+             <TabsContent value="lunch">
+               <div className="grid md:grid-cols-2 gap-6">
+                  {/* MODIFICADO: Passamos o 'item' inteiro, que agora inclui 'imagem_url' */}
                   {lunchMenu.map((item) => (
                     <MenuCard 
                       key={item.id} 
-                      name={item.nome}
-                      description={item.descricao}
-                      price={item.preco}
-                      category={item.category}
+                      item={item} // Passa o objeto completo
+                      onAddToCart={() => addToCart(item)}
                     />
                   ))}
                 </div>
               </TabsContent>
               
               <TabsContent value="dinner">
-                {dinnerMenu.length === 0 && <p className="text-center text-muted-foreground">Nenhum prato de jantar.</p>}
+                {dinnerMenu.length === 0 && <p>...</p>}
                 <div className="grid md:grid-cols-2 gap-6">
-                  {/* 👇 CORREÇÃO AQUI: "Traduz" os props para o MenuCard 👇 */}
+                  {/* MODIFICADO: Passamos o 'item' inteiro, que agora inclui 'imagem_url' */}
                   {dinnerMenu.map((item) => (
                     <MenuCard 
                       key={item.id} 
-                      name={item.nome}
-                      description={item.descricao}
-                      price={item.preco}
-                      category={item.category}
+                      item={item} // Passa o objeto completo
+                      onAddToCart={() => addToCart(item)}
                     />
                   ))}
                 </div>
               </TabsContent>
             </Tabs>
-
-            <section className="py-12 mt-16">
+          <section className="py-12 mt-16">
               <div className="max-w-2xl mx-auto">
-                {/* Passa a lista "traduzida" para o OrderForm */}
-                <OrderForm menuItems={allMenuItemsForOrderForm} />
+                {/* MODIFICADO: Passa o carrinho e as funções de gerenciamento para o OrderForm */}
+                <OrderForm 
+                  cart={cart}
+                  onUpdateQuantity={updateQuantity}
+                  onRemoveFromCart={removeFromCart}
+                  onClearCart={clearCart}
+                />
               </div>
             </section>
           </>

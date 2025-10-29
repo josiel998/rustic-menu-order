@@ -5,7 +5,26 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
-import { ShoppingBag, User, DollarSign, CreditCard, Phone, MapPin } from "lucide-react";
+import { ShoppingBag, User, DollarSign, CreditCard, Phone, MapPin, RefreshCw, AlertTriangle, Loader2, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { echo } from "@/lib/echo";
+
+
+interface OrderStatusEvent {
+    id: string; // Ou number, dependendo do backend
+    status: string;
+}
 
 interface OrderItem {
   id: string;
@@ -30,9 +49,36 @@ const Orders = () => {
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     fetchOrders();
+
+
+  const statusChannel = echo.private('admin-orders'); // Ou o canal que você usa
+    
+    statusChannel.listen('.OrderStatusUpdated', (event: OrderStatusEvent) => {
+      console.log('Orders.tsx ouviu OrderStatusUpdated', event);
+      setOrders(currentOrders => 
+        currentOrders.map(order => 
+          order.id === event.id ? { ...order, status: event.status } : order
+        )
+      );
+    });
+    
+    // (Opcional) Ouvir por um evento de reset global
+    // statusChannel.listen('.PedidosResetados', () => {
+    //   console.log('Orders.tsx ouviu PedidosResetados');
+    //   setOrders([]); // Limpa a lista local
+    //   toast({ title: "Pedidos Resetados", description: "A lista de pedidos foi limpa."});
+    // });
+
+    return () => {
+      statusChannel.stopListening('.OrderStatusUpdated');
+      // statusChannel.stopListening('.PedidosResetados');
+      echo.leave('admin-orders'); // Sai do canal
+    };
+
   }, []);
 
   const fetchOrders = async () => {
@@ -86,14 +132,81 @@ const Orders = () => {
     return colors[status.toLowerCase()] || "bg-gray-500";
   };
 
+  const handleResetOrders = async () => {
+    setResetting(true);
+    try {
+      // Chama a nova rota da API
+      await api.request('/pedidos/reset', {
+        method: 'POST',
+        requiresAuth: true,
+      });
+
+      // Limpa a lista local após o sucesso da API
+      setOrders([]); 
+      
+      toast({
+        title: "Pedidos Resetados!",
+        description: "Todos os pedidos foram removidos com sucesso.",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao resetar",
+        description: error instanceof Error ? error.message : "Não foi possível resetar os pedidos.",
+        variant: "destructive",
+      });
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
       
-      <main className="container mx-auto px-4 py-8">
-        <h1 className="text-4xl font-display font-bold mb-8 animate-fade-in">
-          Pedidos
-        </h1>
+    <main className="container mx-auto px-4 py-8">
+        {/* MODIFICADO: Adiciona div para alinhar título e botão */}
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-4xl font-display font-bold animate-fade-in">
+            Pedidos
+          </h1>
+          {/* --- NOVO: Botão de Reset com AlertDialog --- */}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" disabled={loading || resetting}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Resetar Pedidos
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="text-destructive"/> Confirmação Necessária
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Tem certeza que deseja remover **TODOS** os pedidos? Esta ação é 
+                  permanente e não pode ser desfeita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={resetting}>Cancelar</AlertDialogCancel>
+                {/* Chama handleResetOrders ao clicar */}
+                <AlertDialogAction 
+                  onClick={handleResetOrders} 
+                  disabled={resetting}
+                  className="bg-destructive hover:bg-destructive/90"
+                >
+                  {resetting ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin"/> 
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-2"/>
+                  )}
+                  {resetting ? "Resetando..." : "Sim, Remover Tudo"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          {/* --- Fim do Botão de Reset --- */}
+        </div>
 
         {loading ? (
           <p className="text-center text-muted-foreground">Carregando pedidos...</p>

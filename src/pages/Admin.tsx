@@ -8,8 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Pencil } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
+import { echo } from "@/lib/echo";
 
 // Interface dos dados vindos da API (Português)
 interface MenuItem {
@@ -19,7 +21,15 @@ interface MenuItem {
   preco: string;
   category: string;
   period: "lunch" | "dinner";
+  imagem_url?: string | null;
 }
+
+interface PratoCriadoEvent { prato: MenuItem; }
+interface PratoUpdatedEvent { prato: MenuItem; }
+// (Você também pode adicionar PratoDeletadoEvent se quiser)
+
+// NOVO: Tipo para o formulário (sem o ID)
+type PratoFormData = Omit<MenuItem, "id">;
 
 const Admin = () => {
   const { toast } = useToast();
@@ -34,7 +44,11 @@ const Admin = () => {
     preco: "",
     category: "",
     period: "lunch" as "lunch" | "dinner",
+    imagem_url: "",
   });
+
+  const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [editFormData, setEditFormData] = useState<PratoFormData | null>(null);
 
   const fetchMenuItems = async () => {
     try {
@@ -54,7 +68,39 @@ const Admin = () => {
 
   useEffect(() => {
     fetchMenuItems();
+ 
+
+  const channel = echo.channel('pratos');
+
+    // 1. Ouvir por PRATOS CRIADOS
+    channel.listen('.PratoCriado', (event: PratoCriadoEvent) => {
+      console.log('Admin ouviu PratoCriado', event.prato);
+      setMenuItems(pratosAtuais => [event.prato, ...pratosAtuais]);
+    });
+
+    // 2. Ouvir por PRATOS ATUALIZADOS
+    channel.listen('.PratoUpdated', (event: PratoUpdatedEvent) => {
+      console.log('Admin ouviu PratoUpdated', event.prato);
+      setMenuItems(pratosAtuais =>
+        pratosAtuais.map(item => 
+          item.id === event.prato.id ? event.prato : item // Substitui o item antigo
+        )
+      );
+    });
+    
+    // (Você pode adicionar .listen('.PratoDeletado', ...) aqui)
+
+    return () => {
+      channel.stopListening('.PratoCriado');
+      channel.stopListening('.PratoUpdated'); // NOVO
+      echo.leave('pratos');
+    };
+    // --- Fim do WebSocket ---
+
   }, []);
+
+
+  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +110,7 @@ const Admin = () => {
       const novoPratoData = {
         ...formData,
         preco: parseFloat(formData.preco),
+        imagem_url: formData.imagem_url || null,
       };
 
       const pratoSalvo = await api.request<MenuItem>('/pratos', {
@@ -73,7 +120,7 @@ const Admin = () => {
       });
 
       setMenuItems(pratosAtuais => [pratoSalvo, ...pratosAtuais]);
-      setFormData({ nome: "", descricao: "", preco: "", category: "", period: "lunch" });
+      setFormData({ nome: "", descricao: "", preco: "", category: "", period: "lunch" , imagem_url: "",});
       
       toast({
         title: "Item adicionado!",
@@ -110,6 +157,75 @@ const Admin = () => {
         description: error instanceof Error ? error.message : "Tente novamente",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleOpenEditModal = (item: MenuItem) => {
+    setEditingItem(item); // Salva o item que está sendo editado (incluindo o ID)
+    setEditFormData({    // Preenche o formulário do modal
+      nome: item.nome,
+      descricao: item.descricao,
+      preco: item.preco,
+      category: item.category,
+      period: item.period,
+      imagem_url: item.imagem_url || "",
+    });
+  };
+
+  const handleCloseEditModal = () => {
+    setEditingItem(null);
+    setEditFormData(null);
+  };
+
+  // 3. Atualiza o estado do formulário de edição
+  const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (!editFormData) return;
+    setEditFormData({
+      ...editFormData,
+      [e.target.id]: e.target.value,
+    });
+  };
+
+  // 4. (Para o <Select>)
+  const handleEditSelectChange = (field: 'period', value: "lunch" | "dinner") => {
+     if (!editFormData) return;
+     setEditFormData({
+       ...editFormData,
+       [field]: value,
+     });
+  };
+
+  // 5. Envia a atualização para a API
+  const handleUpdateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem || !editFormData) return;
+
+    setLoadingSubmit(true);
+    try {
+      const dadosAtualizados = {
+        ...editFormData,
+        preco: parseFloat(editFormData.preco),
+        imagem_url: editFormData.imagem_url || null,
+      };
+
+      // Envia requisição PATCH (ou PUT)
+      const pratoAtualizado = await api.request<MenuItem>(`/pratos/${editingItem.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(dadosAtualizados),
+        requiresAuth: true,
+      });
+
+      // Atualiza o estado local (WebSocket também fará isso)
+      // setMenuItems(menuItems.map(item => item.id === pratoAtualizado.id ? pratoAtualizado : item));
+      
+      handleCloseEditModal();
+      toast({ title: "Prato atualizado!", description: `${pratoAtualizado.nome} foi salvo.` });
+
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Verifique os campos";
+      toast({ title: "Erro ao atualizar", description: errorMsg, variant: "destructive" });
+    } finally {
+      setLoadingSubmit(false);
     }
   };
 
@@ -158,6 +274,16 @@ const Admin = () => {
                     </SelectContent>
                   </Select>
                 </div>
+
+                <div>
+                  <Label htmlFor="imagem_url">URL da Imagem (Opcional)</Label>
+                  <Input
+                    id="imagem_url"
+                    value={formData.imagem_url || ""}
+                    onChange={(e) => setFormData({ ...formData, imagem_url: e.target.value })}
+                    placeholder="https://exemplo.com/foto.jpg"
+                  />
+                </div>
                 <Button type="submit" className="w-full" disabled={loadingSubmit}>
                   {loadingSubmit ? (<Loader2 className="h-4 w-4 mr-2 animate-spin" />) : (<Plus className="h-4 w-4 mr-2" />)}
                   {loadingSubmit ? "Salvando..." : "Adicionar ao Cardápio"}
@@ -189,9 +315,14 @@ const Admin = () => {
                             <p className="text-sm text-muted-foreground mb-1">{item.descricao}</p>
                             <p className="text-accent font-semibold">R$ {item.preco}</p>
                           </div>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id)} className="hover:bg-destructive hover:text-destructive-foreground">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                        <div className="flex-shrink-0 flex gap-2">
+                             <Button variant="outline" size="icon" onClick={() => handleOpenEditModal(item)} className="hover:border-primary">
+                                <Pencil className="h-4 w-4" />
+                             </Button>
+                             <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id)} className="hover:bg-destructive hover:text-destructive-foreground">
+                                <Trash2 className="h-4 w-4" />
+                             </Button>
+                          </div>
                         </CardContent>
                       </Card>
                     ))}
@@ -208,9 +339,14 @@ const Admin = () => {
                             <p className="text-sm text-muted-foreground mb-1">{item.descricao}</p>
                             <p className="text-accent font-semibold">R$ {item.preco}</p>
                           </div>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id)} className="hover:bg-destructive hover:text-destructive-foreground">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                         <div className="flex-shrink-0 flex gap-2">
+                             <Button variant="outline" size="icon" onClick={() => handleOpenEditModal(item)} className="hover:border-primary">
+                                <Pencil className="h-4 w-4" />
+                             </Button>
+                             <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id)} className="hover:bg-destructive hover:text-destructive-foreground">
+                                <Trash2 className="h-4 w-4" />
+                             </Button>
+                          </div>
                         </CardContent>
                       </Card>
                     ))}
@@ -221,6 +357,58 @@ const Admin = () => {
           </div>
         </div>
       </main>
+
+      <Dialog open={!!editingItem} onOpenChange={(open) => !open && handleCloseEditModal()}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Editar Prato: {editingItem?.nome}</DialogTitle>
+          </DialogHeader>
+          {/* Renderiza o formulário APENAS se os dados estiverem prontos */}
+          {editFormData && (
+            <form onSubmit={handleUpdateSubmit} className="space-y-4 py-4">
+              <div>
+                <Label htmlFor="nome">Nome do Prato</Label>
+                <Input id="nome" value={editFormData.nome} onChange={handleEditFormChange} required />
+              </div>
+              <div>
+                <Label htmlFor="descricao">Descrição</Label>
+                <Textarea id="descricao" value={editFormData.descricao} onChange={handleEditFormChange} required rows={3} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="preco">Preço (R$)</Label>
+                  <Input id="preco" type="number" step="0.01" value={editFormData.preco} onChange={handleEditFormChange} required />
+                </div>
+                <div>
+                  <Label htmlFor="category">Categoria</Label>
+                  <Input id="category" value={editFormData.category} onChange={handleEditFormChange} required />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="period">Período</Label>
+                <Select value={editFormData.period} onValueChange={(v) => handleEditSelectChange('period', v as any)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="lunch">Almoço</SelectItem>
+                    <SelectItem value="dinner">Jantar</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+               <div>
+                  <Label htmlFor="imagem_url">URL da Imagem (Opcional)</Label>
+                  <Input id="imagem_url" value={editFormData.imagem_url || ""} onChange={handleEditFormChange} placeholder="https://exemplo.com/imagem.jpg" />
+                </div>
+              <DialogFooter>
+                <Button type="button" variant="ghost" onClick={handleCloseEditModal}>Cancelar</Button>
+                <Button type="submit" disabled={loadingSubmit}>
+                  {loadingSubmit && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Salvar Mudanças
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
