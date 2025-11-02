@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { api } from "@/lib/api";
+import api from "@/lib/api";
 import { ShoppingCart, Plus, Minus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 

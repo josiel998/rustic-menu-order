@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { api } from "@/lib/api";
+import api from "@/lib/api";
 import { ShoppingBag, User, DollarSign, CreditCard, Phone, MapPin, RefreshCw, AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { echo } from "@/lib/echo";
+
 
 
 interface OrderStatusEvent {
@@ -277,7 +278,7 @@ const Orders = () => {
                       <SelectContent>
                         <SelectItem value="pendente">Pendente</SelectItem>
                         <SelectItem value="preparando">Preparando</SelectItem>
-                        <SelectItem value="pronto">Pronto</SelectItem>
+                        <SelectItem value="Saiu para entrega">Saiu para entrega</SelectItem>
                         <SelectItem value="entregue">Entregue</SelectItem>
                         <SelectItem value="cancelado">Cancelado</SelectItem>
                       </SelectContent>

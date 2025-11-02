@@ -5,7 +5,7 @@ interface ApiRequestOptions extends RequestInit {
   requiresAuth?: boolean;
 }
 
-export const api = {
+const api = { // Removida a palavra 'export' daqui
   async request<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
     const { requiresAuth = false, ...fetchOptions } = options;
     
@@ -70,3 +70,5 @@ export const api = {
     return !!localStorage.getItem('auth_token');
   },
 };
+
+export default api; // <-- NOVO: Exportação padrão

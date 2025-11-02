@@ -4,7 +4,7 @@ import { MenuCard } from "@/components/MenuCard";
 import { OrderForm } from "@/components/OrderForm";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import heroImage from "@/assets/hero-restaurant.jpg";
-import { api } from "@/lib/api";
+import api from "@/lib/api";
 import { echo } from "@/lib/echo";
 import { useToast } from "@/hooks/use-toast";
 
@@ -138,12 +138,12 @@ const Index = () => {
       {/* Hero (sem mudanças) */}
       <section className="relative h-[500px] overflow-hidden">
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${heroImage})` }} >
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/90 to-primary/70" />
+          <div className="absolute inset-0  from-primary/90 to-primary/70" />
         </div>
-        <div className="relative container mx-auto px-4 h-full flex flex-col justify-center items-start text-primary-foreground">
+        {/* <div className="relative container mx-auto px-4 h-full flex flex-col justify-center items-start text-primary-foreground">
           <h1 className="text-5xl md:text-6xl font-display font-bold mb-4 animate-fade-in">Bom Sabor</h1>
           <p className="text-xl md:text-2xl max-w-2xl animate-fade-in-delay">Comida tradicional feita com carinho, como na casa da vovó</p>
-        </div>
+        </div> */}
       </section>
 
       {/* Menu Section */}
@@ -152,6 +152,7 @@ const Index = () => {
           <h2 className="text-4xl font-display font-bold mb-4">Nosso Cardápio</h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">Pratos preparados diariamente com ingredientes frescos e selecionados</p>
         </div>
+        
 
         {loading ? (
           <p className="text-center text-muted-foreground">Carregando cardápio...</p>
