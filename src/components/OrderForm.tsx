@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
 import { ShoppingCart, Plus, Minus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Textarea } from "@/components/ui/textarea";
 
 
 interface MenuItem {
@@ -32,9 +33,10 @@ interface OrderFormProps {
   onUpdateQuantity: (id: string, delta: number) => void;
   onRemoveFromCart: (id: string) => void;
   onClearCart: () => void;
+  period: "lunch" | "dinner";
 }
 
-export function OrderForm({ cart, onUpdateQuantity, onRemoveFromCart, onClearCart }: OrderFormProps) {
+export function OrderForm({ cart, onUpdateQuantity, onRemoveFromCart, onClearCart, period }: OrderFormProps) {
   const { toast } = useToast();
   const [telefone, setTelefone] = useState(""); 
   const [endereco, setEndereco] = useState("");
@@ -42,6 +44,8 @@ export function OrderForm({ cart, onUpdateQuantity, onRemoveFromCart, onClearCar
   const [meioPagamento, setMeioPagamento] = useState("");
   const [loading, setLoading] = useState(false);
   const [submittedOrderUuid, setSubmittedOrderUuid] = useState<string | null>(null);
+  const [tipoEntrega, setTipoEntrega] = useState("entrega"); // 'entrega' ou 'retirada'
+  const [observacoes, setObservacoes] = useState("");
   
 
   // const addToCart = (item: MenuItem) => {
@@ -92,6 +96,9 @@ export function OrderForm({ cart, onUpdateQuantity, onRemoveFromCart, onClearCar
           telefone,
           endereco,
           meio_pagamento: meioPagamento,
+          tipo_entrega: tipoEntrega, // <-- NOVO
+          observacoes: observacoes,
+          period: period,
           itens: cart.map(item => ({
             id: item.id,
             name: item.name,
@@ -115,6 +122,8 @@ export function OrderForm({ cart, onUpdateQuantity, onRemoveFromCart, onClearCar
       setTelefone("");
       setEndereco("");
       setMeioPagamento("");
+      setTipoEntrega("entrega"); // <-- NOVO
+      setObservacoes("");
 
       // SALVA O UUID do pedido
       setSubmittedOrderUuid(newOrder.uuid);
@@ -216,6 +225,33 @@ export function OrderForm({ cart, onUpdateQuantity, onRemoveFromCart, onClearCar
               </Select>
             </div>
           </div>
+
+          <div>
+                <Label htmlFor="tipo_entrega">Tipo de Pedido</Label>
+                <Select value={tipoEntrega} onValueChange={(v) => setTipoEntrega(v as any)} required>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="entrega">Entrega (Delivery)</SelectItem>
+                    <SelectItem value="retirada">Retirada no Local</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            
+
+            <div>
+              <Label htmlFor="observacoes">Observações (Opcional)</Label>
+              <Textarea
+                id="observacoes"
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
+                placeholder="Ex: Sem cebola, ponto da carne mal passado, etc."
+                rows={3}
+              />
+            </div>
+
+            
 {/* <div className="border-t pt-4"> ... </div> */}
 
           {/* A seção "Carrinho" agora usa os props */}

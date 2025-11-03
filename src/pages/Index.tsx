@@ -45,6 +45,7 @@ const Index = () => {
   const [menuItems, setMenuItems] = useState<MenuItemFromDB[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const [currentPeriod, setCurrentPeriod] = useState<"lunch" | "dinner">("lunch");
 
   const [cart, setCart] = useState<CartItem[]>([]);
 
@@ -158,12 +159,16 @@ const Index = () => {
           <p className="text-center text-muted-foreground">Carregando cardápio...</p>
         ) : (
           <>
-            <Tabs defaultValue="lunch" className="w-full">
+           <Tabs 
+              value={currentPeriod} 
+              onValueChange={(v) => setCurrentPeriod(v as "lunch" | "dinner")} 
+              className="w-full"
+            >
               <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-12">
                 <TabsTrigger value="lunch" className="text-lg">Almoço</TabsTrigger>
                 <TabsTrigger value="dinner" className="text-lg">Jantar</TabsTrigger>
               </TabsList>
-              
+
              <TabsContent value="lunch">
                <div className="grid md:grid-cols-2 gap-6">
                   {/* MODIFICADO: Passamos o 'item' inteiro, que agora inclui 'imagem_url' */}
@@ -194,11 +199,12 @@ const Index = () => {
           <section className="py-12 mt-16">
               <div className="max-w-2xl mx-auto">
                 {/* MODIFICADO: Passa o carrinho e as funções de gerenciamento para o OrderForm */}
-                <OrderForm 
+               <OrderForm 
                   cart={cart}
                   onUpdateQuantity={updateQuantity}
                   onRemoveFromCart={removeFromCart}
                   onClearCart={clearCart}
+                  period={currentPeriod} // <-- NOVO
                 />
               </div>
             </section>

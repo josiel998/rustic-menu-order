@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
-import { ShoppingBag, User, DollarSign, CreditCard, Phone, MapPin, RefreshCw, AlertTriangle, Loader2, Trash2 } from "lucide-react";
+import { ShoppingBag, User, DollarSign, CreditCard, Phone, MapPin, RefreshCw, AlertTriangle, Loader2, Trash2, StickyNote, Package, Clock, Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -42,6 +42,9 @@ interface Order {
   total: string;
   status: string;
   meio_pagamento: string;
+  tipo_entrega: string;      // <-- NOVO
+  observacoes: string | null;
+  period: "lunch" | "dinner";
   itens: OrderItem[];
   created_at: string;
 }
@@ -51,6 +54,20 @@ const Orders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
+
+
+  const formatOrderTime = (timestamp: string) => {
+    try {
+      return new Date(timestamp).toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return timestamp; // Retorna o original se falhar
+    }
+  };
 
   useEffect(() => {
     fetchOrders();
@@ -219,14 +236,23 @@ const Orders = () => {
               <Card key={order.id} className="shadow-elevated animate-fade-in">
                 <CardHeader>
                   <div className="flex justify-between items-start">
-                    <CardTitle className="text-lg">Pedido #{order.id}</CardTitle>
+                   <div>
+                      <CardTitle className="text-lg">Pedido #{order.id}</CardTitle>
+                      {/* --- NOVO: HORA DO PEDIDO --- */}
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                        <Clock className="h-4 w-4" />
+                        <span>{formatOrderTime(order.created_at)}</span>
+                      </div>
+                      {/* --- FIM HORA DO PEDIDO --- */}
+                    </div>
+                    
                     <Badge className={getStatusColor(order.status)}>
                       {order.status}
                     </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-               <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid md:grid-cols-2 gap-4">
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm">{order.cliente}</span>
@@ -247,6 +273,39 @@ const Orders = () => {
                       <CreditCard className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm">{order.meio_pagamento}</span>
                     </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4 text-muted-foreground" />
+                      <Badge variant="outline" className="text-sm capitalize">
+                        {order.tipo_entrega}
+                      </Badge>
+                    </div>
+                  <div className="flex items-center gap-2">
+                      {order.period === 'lunch' ? (
+                        <Sun className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Moon className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <Badge variant="outline" className="text-sm capitalize">
+                        {order.period === 'lunch' ? 'Almoço' : 'Jantar'}
+                      </Badge>
+                    </div>
+                    {/* --- FIM DO PERÍODO --- */}
+                  
+                 
+
+                  {/* --- NOVO CAMPO DE OBSERVAÇÕES --- */}
+                  {order.observacoes && (
+                    <div className="pt-2 border-t">
+                      <h4 className="font-semibold mb-2 flex items-center gap-2">
+                        <StickyNote className="h-4 w-4" />
+                        Observações:
+                      </h4>
+                      <p className="text-sm text-muted-foreground italic">
+                        "{order.observacoes}"
+                      </p>
+                    </div>
+                  )}
                   </div>
 
                   <div>
