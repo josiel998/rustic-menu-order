@@ -119,7 +119,7 @@ const Admin = () => {
         requiresAuth: true,
       });
 
-      setMenuItems(pratosAtuais => [pratoSalvo, ...pratosAtuais]);
+      // setMenuItems(pratosAtuais => [pratoSalvo, ...pratosAtuais]);
       setFormData({ nome: "", descricao: "", preco: "", category: "", period: "lunch" , imagem_url: "",});
       
       toast({

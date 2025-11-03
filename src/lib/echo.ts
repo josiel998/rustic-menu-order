@@ -23,5 +23,13 @@ export const echo = new Echo({
     wssPort: VITE_REVERB_PORT,
     forceTLS: VITE_REVERB_SCHEME === 'https',
     enabledTransports: ['ws', 'wss'],
-    authEndpoint: `${BASE_URL}/broadcasting/auth`,
+   authEndpoint: `${API_URL}/broadcasting/auth`,
+
+   
+    
+    // possa adicionar o token a ele depois.
+    auth: {
+        headers: {},
+    },
+    
 });

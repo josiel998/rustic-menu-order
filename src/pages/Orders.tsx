@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
 import { ShoppingBag, User, DollarSign, CreditCard, Phone, MapPin, RefreshCw, AlertTriangle, Loader2, Trash2, StickyNote, Package, Clock, Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,11 +50,17 @@ interface Order {
   created_at: string;
 }
 
+interface PedidoCriadoEvent {
+  pedido: Order; // O evento vai trazer o objeto 'pedido' completo
+}
+
 const Orders = () => {
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingOrders, setLoadingOrders] = useState(true);
   const [resetting, setResetting] = useState(false);
+  const { loading: authLoading, isAuthenticated } = useAuth();
 
 
   const formatOrderTime = (timestamp: string) => {
@@ -70,36 +77,63 @@ const Orders = () => {
   };
 
   useEffect(() => {
+    // A busca de pedidos pode rodar sempre
     fetchOrders();
 
+    // SÓ TENTE SE CONECTAR AO WEBSOCKET SE:
+    // 1. A autenticação NÃO estiver carregando
+    // 2. O usuário ESTIVER autenticado
+    if (!authLoading && isAuthenticated) {
+      
+      // Agora este log deve funcionar
+      if (echo.options.auth && echo.options.auth.headers['Authorization']) {
+        console.log(
+          'Orders.tsx: Autenticação pronta. Conectando ao Echo com token.',
+        );
+      } else {
+        console.error('Orders.tsx: Autenticação pronta, MAS o token do Echo não foi definido! Verifique o AuthContext.');
+        return; // Não tenta se inscrever
+      }
 
-  const statusChannel = echo.private('admin-orders'); // Ou o canal que você usa
+      const statusChannel = echo.private('admin-orders');
     
-    statusChannel.listen('.OrderStatusUpdated', (event: OrderStatusEvent) => {
-      console.log('Orders.tsx ouviu OrderStatusUpdated', event);
-      setOrders(currentOrders => 
-        currentOrders.map(order => 
-          order.id === event.id ? { ...order, status: event.status } : order
-        )
-      );
-    });
-    
-    // (Opcional) Ouvir por um evento de reset global
-    // statusChannel.listen('.PedidosResetados', () => {
-    //   console.log('Orders.tsx ouviu PedidosResetados');
-    //   setOrders([]); // Limpa a lista local
-    //   toast({ title: "Pedidos Resetados", description: "A lista de pedidos foi limpa."});
-    // });
+      statusChannel.listen('.OrderStatusUpdated', (event: OrderStatusEvent) => {
+        console.log('Orders.tsx ouviu OrderStatusUpdated', event);
+        setOrders(currentOrders => 
+          currentOrders.map(order => 
+            order.id === event.id ? { ...order, status: event.status } : order
+          )
+        );
+      });
 
-    return () => {
-      statusChannel.stopListening('.OrderStatusUpdated');
-      // statusChannel.stopListening('.PedidosResetados');
-      echo.leave('admin-orders'); // Sai do canal
-    };
+      statusChannel.listen('.PedidoCriado', (event: PedidoCriadoEvent) => {
+        console.log('Orders.tsx ouviu PedidoCriado', event);
+        
+        setOrders(currentOrders => [event.pedido, ...currentOrders]);
 
-  }, []);
+        toast({
+          title: "Novo Pedido Recebido!",
+          description: `Pedido #${event.pedido.id} de ${event.pedido.cliente}.`,
+        });
+      });
+
+      // Função de limpeza
+      return () => {
+        console.log('Orders.tsx: Limpando e saindo do canal admin-orders');
+        statusChannel.stopListening('.OrderStatusUpdated');
+        statusChannel.stopListening('.PedidoCriado');
+        echo.leave('admin-orders');
+      };
+    } else if (!authLoading && !isAuthenticated) {
+        // Isso não deve acontecer por causa do ProtectedRoute, mas é um bom log
+        console.warn('Orders.tsx: Carregado sem autenticação. Não vai se inscrever no Echo.');
+    }
+  
+    // 5. Adicione authLoading e isAuthenticated como dependências
+  }, [authLoading, isAuthenticated, toast]);
 
   const fetchOrders = async () => {
+    setLoadingOrders(true);
     try {
       const data = await api.request<Order[]>('/pedidos', { requiresAuth: true });
       setOrders(data);
@@ -110,7 +144,7 @@ const Orders = () => {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+     setLoadingOrders(false);
     }
   };
 
@@ -190,7 +224,7 @@ const Orders = () => {
           {/* --- NOVO: Botão de Reset com AlertDialog --- */}
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="destructive" disabled={loading || resetting}>
+              <Button variant="destructive" disabled={loadingOrders || resetting}>
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Resetar Pedidos
               </Button>
@@ -226,7 +260,7 @@ const Orders = () => {
           {/* --- Fim do Botão de Reset --- */}
         </div>
 
-        {loading ? (
+        {loadingOrders ? (
           <p className="text-center text-muted-foreground">Carregando pedidos...</p>
         ) : orders.length === 0 ? (
           <p className="text-center text-muted-foreground">Nenhum pedido encontrado</p>
