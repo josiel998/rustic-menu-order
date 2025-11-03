@@ -46,6 +46,42 @@ const api = { // Removida a palavra 'export' daqui
     return response.json();
   },
 
+  async postFormData<T>(endpoint: string, formData: FormData, options: ApiRequestOptions = {}): Promise<T> {
+    const { requiresAuth = false, ...fetchOptions } = options;
+
+    const headers: HeadersInit = {
+      'Accept': 'application/json',
+      // NÃO DEFINIMOS 'Content-Type'. O navegador faz isso para 'multipart/form-data'.
+      ...fetchOptions.headers,
+    };
+
+    if (requiresAuth) {
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    }
+    
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      ...fetchOptions,
+      method: 'POST', 
+      body: formData,
+      headers,
+    });
+
+    if (!response.ok) {
+      // Tenta extrair a mensagem de erro JSON (útil para erros de validação)
+      const error = await response.json().catch(() => ({ message: 'Erro na requisição ou arquivo grande demais' }));
+      throw new Error(error.message || `Erro ${response.status}`);
+    }
+    
+    if (response.status === 204) {
+      return Promise.resolve({}) as Promise<T>;
+    }
+
+    return response.json();
+  },
+
   async login(email: string, password: string) {
     const data = await this.request('/login', {
       method: 'POST',

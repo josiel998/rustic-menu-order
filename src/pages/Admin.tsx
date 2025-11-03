@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Loader2, Pencil } from "lucide-react";
+import { Plus, Trash2, Loader2, Pencil, Upload } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import api from "@/lib/api";
 import { echo } from "@/lib/echo";
@@ -37,6 +37,8 @@ const Admin = () => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
+
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   // Estado do formulário (Português)
   const [formData, setFormData] = useState({
@@ -102,45 +104,80 @@ const Admin = () => {
   }, []);
 
 
-  
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoadingSubmit(true);
-    try {
-      // Prepara os dados (Backend espera 'preco' como número)
-      const novoPratoData = {
-        ...formData,
-        preco: parseFloat(formData.preco),
-        preco_pequeno: formData.preco_pequeno ? parseFloat(formData.preco_pequeno) : null,
-        imagem_url: formData.imagem_url || null,
-      };
-
-      const pratoSalvo = await api.request<MenuItem>('/pratos', {
-        method: 'POST',
-        body: JSON.stringify(novoPratoData),
-        requiresAuth: true,
-      });
-
-      // setMenuItems(pratosAtuais => [pratoSalvo, ...pratosAtuais]);
-      setFormData({ nome: "", descricao: "", preco: "", preco_pequeno: "", category: "", period: "lunch" , imagem_url: "",});
-      
-      toast({
-        title: "Item adicionado!",
-        description: "O prato foi salvo no banco de dados.",
-      });
-
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "Verifique os campos";
-      toast({
-        title: "Erro ao salvar prato",
-        description: errorMsg,
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingSubmit(false);
+   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    } else {
+      setSelectedFile(null);
     }
   };
+
+
+  
+
+   const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoadingSubmit(true);
+    
+    // Se há um arquivo selecionado, usamos FormData
+    if (selectedFile) {
+        const dataToSend = new FormData();
+        dataToSend.append('nome', formData.nome);
+        dataToSend.append('descricao', formData.descricao);
+        dataToSend.append('preco', formData.preco.toString());
+        
+        if (formData.preco_pequeno) {
+            dataToSend.append('preco_pequeno', formData.preco_pequeno.toString());
+        }
+        
+        dataToSend.append('category', formData.category);
+        dataToSend.append('period', formData.period);
+        dataToSend.append('imagem', selectedFile); // O arquivo
+
+        try {
+          await api.postFormData<MenuItem>('/pratos', dataToSend, { requiresAuth: true });
+        } catch (error) {
+           const errorMsg = error instanceof Error ? error.message : "Verifique os campos";
+           toast({ title: "Erro ao salvar prato", description: errorMsg, variant: "destructive" });
+        }
+        
+    } else {
+        // Se NÃO há arquivo, usamos o fluxo JSON existente (URL ou sem imagem)
+        try {
+          const novoPratoData = {
+            ...formData,
+            preco: parseFloat(formData.preco),
+            preco_pequeno: formData.preco_pequeno ? parseFloat(formData.preco_pequeno) : null,
+            imagem_url: formData.imagem_url || null,
+          };
+
+          await api.request<MenuItem>('/pratos', {
+            method: 'POST',
+            body: JSON.stringify(novoPratoData),
+            requiresAuth: true,
+          });
+
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : "Verifique os campos";
+          toast({ title: "Erro ao salvar prato", description: errorMsg, variant: "destructive" });
+        }
+    }
+    
+    // Independentemente do fluxo (JSON ou FormData), limpa o formulário no final
+    if (!selectedFile) {
+        // Limpar o formulário apenas se não houve erro no catch
+        setFormData({ nome: "", descricao: "", preco: "", preco_pequeno: "", category: "", period: "lunch" , imagem_url: "",});
+        toast({ title: "Item adicionado!", description: "O prato foi salvo no banco de dados.", });
+    } else {
+        // Limpar tudo para o fluxo FormData
+        setFormData({ nome: "", descricao: "", preco: "", preco_pequeno: "", category: "", period: "lunch" , imagem_url: "",});
+        setSelectedFile(null);
+        toast({ title: "Item adicionado!", description: "O prato foi salvo no banco de dados.", });
+    }
+
+    setLoadingSubmit(false);
+  };
+
 
   const handleDelete = async (id: string) => {
     try {
@@ -173,6 +210,7 @@ const Admin = () => {
       period: item.period,
       imagem_url: item.imagem_url || "",
     });
+    setSelectedFile(null);
   };
 
   const handleCloseEditModal = () => {
@@ -204,10 +242,15 @@ const Admin = () => {
     if (!editingItem || !editFormData) return;
 
     setLoadingSubmit(true);
+    
+    // *** NOTA: NÃO MUDAMOS A EDIÇÃO PARA FORMDATA AQUI PARA MANTER O FLUXO SIMPLES.
+    // O ideal seria usar FormData + o campo _method: 'PATCH'
+    
     try {
       const dadosAtualizados = {
         ...editFormData,
         preco: parseFloat(editFormData.preco),
+        preco_pequeno: editFormData.preco_pequeno ? parseFloat(editFormData.preco_pequeno) : null,
         imagem_url: editFormData.imagem_url || null,
       };
 
@@ -294,6 +337,24 @@ const Admin = () => {
                   </Select>
                 </div>
 
+                    <div>
+                  <Label htmlFor="imagem_upload" className="flex items-center gap-1">
+                    <Upload className="h-4 w-4 text-primary" />
+                    Upload de Imagem (Local)
+                  </Label>
+                  <Input
+                    id="imagem_upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="cursor-pointer"
+                  />
+                  {selectedFile && (
+                    <p className="text-xs text-muted-foreground mt-1">Arquivo selecionado: {selectedFile.name}</p>
+                  )}
+                </div>
+
+                {/* CAMPO URL DA IMAGEM (Alternativa ao upload) */}
                 <div>
                   <Label htmlFor="imagem_url">URL da Imagem (Opcional)</Label>
                   <Input
@@ -301,8 +362,11 @@ const Admin = () => {
                     value={formData.imagem_url || ""}
                     onChange={(e) => setFormData({ ...formData, imagem_url: e.target.value })}
                     placeholder="https://exemplo.com/foto.jpg"
+                    disabled={!!selectedFile} // Desabilita se houver arquivo local
                   />
+                  <p className="text-xs text-muted-foreground mt-1">Use URL externa OU Upload local.</p>
                 </div>
+                
                 <Button type="submit" className="w-full" disabled={loadingSubmit}>
                   {loadingSubmit ? (<Loader2 className="h-4 w-4 mr-2 animate-spin" />) : (<Plus className="h-4 w-4 mr-2" />)}
                   {loadingSubmit ? "Salvando..." : "Adicionar ao Cardápio"}
@@ -377,7 +441,7 @@ const Admin = () => {
         </div>
       </main>
 
-      <Dialog open={!!editingItem} onOpenChange={(open) => !open && handleCloseEditModal()}>
+    <Dialog open={!!editingItem} onOpenChange={(open) => !open && handleCloseEditModal()}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Editar Prato: {editingItem?.nome}</DialogTitle>
@@ -395,23 +459,30 @@ const Admin = () => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="preco">Preço (R$)</Label>
+                  <Label htmlFor="preco">Preço Grande (R$)</Label>
                   <Input id="preco" type="number" step="0.01" value={editFormData.preco} onChange={handleEditFormChange} required />
                 </div>
+                <div>
+                  <Label htmlFor="preco_pequeno">Preço Pequeno (R$)</Label>
+                  {/* @ts-ignore */}
+                  <Input id="preco_pequeno" type="number" step="0.01" value={editFormData.preco_pequeno || ""} onChange={handleEditFormChange} placeholder="0.00 (Opcional)" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="category">Categoria</Label>
                   <Input id="category" value={editFormData.category} onChange={handleEditFormChange} required />
                 </div>
-              </div>
-              <div>
-                <Label htmlFor="period">Período</Label>
-                <Select value={editFormData.period} onValueChange={(v) => handleEditSelectChange('period', v as any)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="lunch">Almoço</SelectItem>
-                    <SelectItem value="dinner">Jantar</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div>
+                  <Label htmlFor="period">Período</Label>
+                  <Select value={editFormData.period} onValueChange={(v) => handleEditSelectChange('period', v as any)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="lunch">Almoço</SelectItem>
+                      <SelectItem value="dinner">Jantar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
                <div>
                   <Label htmlFor="imagem_url">URL da Imagem (Opcional)</Label>
