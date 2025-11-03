@@ -19,6 +19,7 @@ interface MenuItem {
   nome: string;
   descricao: string;
   preco: string;
+  preco_pequeno?: string | null;
   category: string;
   period: "lunch" | "dinner";
   imagem_url?: string | null;
@@ -42,6 +43,7 @@ const Admin = () => {
     nome: "",
     descricao: "",
     preco: "",
+    preco_pequeno: "",
     category: "",
     period: "lunch" as "lunch" | "dinner",
     imagem_url: "",
@@ -110,6 +112,7 @@ const Admin = () => {
       const novoPratoData = {
         ...formData,
         preco: parseFloat(formData.preco),
+        preco_pequeno: formData.preco_pequeno ? parseFloat(formData.preco_pequeno) : null,
         imagem_url: formData.imagem_url || null,
       };
 
@@ -120,7 +123,7 @@ const Admin = () => {
       });
 
       // setMenuItems(pratosAtuais => [pratoSalvo, ...pratosAtuais]);
-      setFormData({ nome: "", descricao: "", preco: "", category: "", period: "lunch" , imagem_url: "",});
+      setFormData({ nome: "", descricao: "", preco: "", preco_pequeno: "", category: "", period: "lunch" , imagem_url: "",});
       
       toast({
         title: "Item adicionado!",
@@ -260,6 +263,22 @@ const Admin = () => {
                     <Input id="preco" type="number" step="0.01" value={formData.preco} onChange={(e) => setFormData({ ...formData, preco: e.target.value })} required placeholder="0.00" />
                   </div>
                   <div>
+        {/* NOVO CAMPO: Prato Pequeno */}
+        <Label htmlFor="preco_pequeno">Preço Pequeno (R$)</Label>
+        <Input 
+            id="preco_pequeno" 
+            type="number" 
+            step="0.01" 
+            value={formData.preco_pequeno} 
+            onChange={(e) => setFormData({ ...formData, preco_pequeno: e.target.value })} 
+            placeholder="0.00 (Opcional)" 
+        />
+    </div>
+
+                  
+                  <div>
+
+                    
                     <Label htmlFor="category">Categoria</Label>
                     <Input id="category" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} required placeholder="Ex: Prato Principal" />
                   </div>
