@@ -15,6 +15,8 @@ const api = { // Removida a palavra 'export' daqui
       ...fetchOptions.headers,
     };
 
+    
+
     if (requiresAuth) {
       const token = localStorage.getItem('auth_token');
       if (token) {

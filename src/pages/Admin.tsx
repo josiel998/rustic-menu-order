@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Loader2, Pencil, Upload } from "lucide-react";
+import { Plus, Trash2, Loader2, Pencil, Upload, ImageOff } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import api from "@/lib/api";
 import { echo } from "@/lib/echo";
@@ -53,6 +53,8 @@ const Admin = () => {
 
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [editFormData, setEditFormData] = useState<PratoFormData | null>(null);
+
+   const [editImageFile, setEditImageFile] = useState<File | null>(null);
 
   const fetchMenuItems = async () => {
     try {
@@ -206,6 +208,7 @@ const Admin = () => {
       nome: item.nome,
       descricao: item.descricao,
       preco: item.preco,
+       preco_pequeno: item.preco_pequeno || "",
       category: item.category,
       period: item.period,
       imagem_url: item.imagem_url || "",
@@ -216,6 +219,7 @@ const Admin = () => {
   const handleCloseEditModal = () => {
     setEditingItem(null);
     setEditFormData(null);
+    setEditImageFile(null); 
   };
 
   // 3. Atualiza o estado do formulário de edição
@@ -225,6 +229,16 @@ const Admin = () => {
       ...editFormData,
       [e.target.id]: e.target.value,
     });
+  };
+
+   const handleEditFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setEditImageFile(e.target.files[0]);
+      // Limpa o campo URL se um arquivo local for selecionado
+      setEditFormData(prev => ({ ...prev!, imagem_url: "" }));
+    } else {
+      setEditImageFile(null);
+    }
   };
 
   // 4. (Para o <Select>)
@@ -237,35 +251,73 @@ const Admin = () => {
   };
 
   // 5. Envia a atualização para a API
-  const handleUpdateSubmit = async (e: React.FormEvent) => {
+   const handleUpdateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem || !editFormData) return;
 
     setLoadingSubmit(true);
     
-    // *** NOTA: NÃO MUDAMOS A EDIÇÃO PARA FORMDATA AQUI PARA MANTER O FLUXO SIMPLES.
-    // O ideal seria usar FormData + o campo _method: 'PATCH'
-    
+    // Define o endpoint da API
+    const endpoint = `/pratos/${editingItem.id}`;
+
     try {
-      const dadosAtualizados = {
-        ...editFormData,
-        preco: parseFloat(editFormData.preco),
-        preco_pequeno: editFormData.preco_pequeno ? parseFloat(editFormData.preco_pequeno) : null,
-        imagem_url: editFormData.imagem_url || null,
-      };
-
-      // Envia requisição PATCH (ou PUT)
-      const pratoAtualizado = await api.request<MenuItem>(`/pratos/${editingItem.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(dadosAtualizados),
-        requiresAuth: true,
-      });
-
-      // Atualiza o estado local (WebSocket também fará isso)
-      // setMenuItems(menuItems.map(item => item.id === pratoAtualizado.id ? pratoAtualizado : item));
+      const preco = parseFloat(editFormData.preco);
+      const precoPequeno = editFormData.preco_pequeno ? parseFloat(editFormData.preco_pequeno) : null;
       
+      // Variável para armazenar a resposta da API
+      let pratoAtualizado: MenuItem; 
+
+      if (editImageFile) {
+        // --- FLUXO 1: UPLOAD LOCAL (FormData) ---
+        const dataToSend = new FormData();
+        
+        // Adiciona todos os campos
+        dataToSend.append('nome', editFormData.nome);
+        dataToSend.append('descricao', editFormData.descricao);
+        dataToSend.append('preco', preco.toString());
+        dataToSend.append('category', editFormData.category);
+        dataToSend.append('period', editFormData.period);
+        if (precoPequeno) {
+          dataToSend.append('preco_pequeno', precoPequeno.toString());
+        }
+        dataToSend.append('imagem', editImageFile); // O novo arquivo
+        dataToSend.append('_method', 'PUT'); // Método para o Laravel (já que FormData só usa POST)
+
+        // 🟢 CORREÇÃO: Usar api.postFormData para uploads
+        pratoAtualizado = await api.postFormData<MenuItem>(endpoint, dataToSend, {
+            requiresAuth: true,
+        });
+
+      } else {
+        // --- FLUXO 2: URL EXTERNA / SEM IMAGEM (JSON) ---
+        const dadosAtualizados = {
+          ...editFormData,
+          preco: preco,
+          preco_pequeno: precoPequeno,
+          imagem_url: editFormData.imagem_url || null, 
+        };
+        
+        // 🟢 CORREÇÃO: Usar api.request para JSON (com PATCH)
+        pratoAtualizado = await api.request<MenuItem>(endpoint, {
+            method: 'PATCH',
+            body: JSON.stringify(dadosAtualizados),
+            requiresAuth: true,
+        });
+      }
+      
+      // --- SUCESSO (COMUM A AMBOS OS FLUXOS) ---
+
+      // 🟢 CORREÇÃO 2: Atualizar o estado local imediatamente.
+      // Isso garante que a UI atualize, mesmo que o evento WebSocket
+      // seja 'toOthers()' e não chegue para este cliente.
+      setMenuItems(pratosAtuais =>
+        pratosAtuais.map(item => 
+          item.id === pratoAtualizado.id ? pratoAtualizado : item
+        )
+      );
+
       handleCloseEditModal();
-      toast({ title: "Prato atualizado!", description: `${pratoAtualizado.nome} foi salvo.` });
+      toast({ title: "Prato atualizado!", description: `O prato foi salvo.` });
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Verifique os campos";
@@ -274,7 +326,7 @@ const Admin = () => {
       setLoadingSubmit(false);
     }
   };
-
+  
   const lunchItems = menuItems.filter(item => item.period === "lunch");
   const dinnerItems = menuItems.filter(item => item.period === "dinner");
 
@@ -484,10 +536,60 @@ const Admin = () => {
                   </Select>
                 </div>
               </div>
-               <div>
-                  <Label htmlFor="imagem_url">URL da Imagem (Opcional)</Label>
-                  <Input id="imagem_url" value={editFormData.imagem_url || ""} onChange={handleEditFormChange} placeholder="https://exemplo.com/imagem.jpg" />
+               <div className="space-y-2 border-t pt-4">
+                  <Label htmlFor="edit_imagem_upload" className="flex items-center gap-1">
+                    <Upload className="h-4 w-4 text-primary" />
+                    Substituir Imagem (Local)
+                  </Label>
+                  <Input
+                    id="edit_imagem_upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleEditFileChange}
+                    className="cursor-pointer"
+                  />
+                  {editImageFile && (
+                    <p className="text-xs text-muted-foreground mt-1">Novo arquivo: {editImageFile.name}. A URL abaixo será ignorada.</p>
+                  )}
+              </div>
+
+              {/* CAMPO URL DA IMAGEM (Alternativa/Atual) */}
+              <div>
+                  <Label htmlFor="imagem_url">URL da Imagem Atual (Opcional)</Label>
+                  <Input 
+                    id="imagem_url" 
+                    value={editFormData.imagem_url || ""} 
+                    onChange={handleEditFormChange} 
+                    placeholder="https://exemplo.com/imagem.jpg" 
+                    disabled={!!editImageFile} // Desabilita se houver upload local
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">URL atual será mantida, a menos que um arquivo local seja enviado acima.</p>
+              </div>
+
+               {/* Preview da imagem atual/nova */}
+              <div className="mt-4">
+                    <Label>Preview da Imagem</Label>
+                    <div className="h-32 w-full border border-gray-300 rounded-lg overflow-hidden flex items-center justify-center bg-gray-100">
+                        {editImageFile ? (
+                             // Preview da nova imagem (local)
+                            <img 
+                                src={URL.createObjectURL(editImageFile)} 
+                                alt="Nova Imagem do Prato" 
+                                className="h-full w-full object-cover"
+                            />
+                        ) : editFormData.imagem_url ? (
+                            // Imagem existente (URL)
+                            <img 
+                                src={editFormData.imagem_url} 
+                                alt="Imagem Atual do Prato" 
+                                className="h-full w-full object-cover"
+                            />
+                        ) : (
+                            <span className="text-sm text-gray-500 flex items-center"><ImageOff className="h-4 w-4 mr-1"/> Nenhuma imagem definida.</span>
+                        )}
+                    </div>
                 </div>
+
               <DialogFooter>
                 <Button type="button" variant="ghost" onClick={handleCloseEditModal}>Cancelar</Button>
                 <Button type="submit" disabled={loadingSubmit}>
