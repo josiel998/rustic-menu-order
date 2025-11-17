@@ -221,6 +221,12 @@ const addToCart = (item: MenuItemFromDB, selectedPrice: string, selectedName: st
       {/* Footer (sem mudanças) */}
       <footer className="border-t bg-card mt-16">
         <div className="container mx-auto px-4 py-8 text-center text-muted-foreground">
+
+          <div className="mb-4">
+            <h4 className="font-semibold text-lg text-foreground mb-2">Contato</h4>
+            <p className="font-body text-base">+55 31 9585-6444</p>
+           
+          </div>
           <p className="font-body">© 2024 Restaurante Bom Sabor. Feito com carinho.</p>
         </div>
       </footer>

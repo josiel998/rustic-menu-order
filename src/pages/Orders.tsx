@@ -43,7 +43,7 @@ interface Order {
   total: string;
   status: string;
   meio_pagamento: string;
-  tipo_entrega: string;      // <-- NOVO
+  tipo_entrega: string;      
   observacoes: string | null;
   period: "lunch" | "dinner";
   itens: OrderItem[];
@@ -80,7 +80,7 @@ const Orders = () => {
     // A busca de pedidos pode rodar sempre
     fetchOrders();
 
-    // SÓ TENTE SE CONECTAR AO WEBSOCKET SE:
+    // SÓ TENTA SE CONECTAR AO WEBSOCKET SE:
     // 1. A autenticação NÃO estiver carregando
     // 2. O usuário ESTIVER autenticado
     if (!authLoading && isAuthenticated) {
@@ -211,6 +211,66 @@ const Orders = () => {
     }
   };
 
+const renderAddress = (endereco: string) => {
+    // 1. Verifica se é o novo formato de entrega
+    if (endereco.startsWith('Entrega em:')) {
+      // 2. Tenta dividir a string no ponto "Endereço: "
+      const parts = endereco.split('. Endereço: ');
+      
+      // 3. Divide a primeira parte (Cidade/Bairro) da segunda (Rua)
+      if (parts.length === 2) {
+        
+        const mainPart = parts[0]; // "Entrega em: Mario Campos - Centro (Taxa: R$ 6.00)"
+        const streetPart = parts[1]; // "Rua das Flores, 123"
+
+        // 4. Divide a parte principal para extrair a taxa
+        const taxParts = mainPart.split(' (Taxa: ');
+        
+        let cityBairro = mainPart.replace('Entrega em: ', ''); // Fallback
+        let taxInfo = null; // Onde guardaremos a taxa
+
+        if (taxParts.length === 2) {
+          // "Entrega em: Mario Campos - Centro"
+          cityBairro = taxParts[0].replace('Entrega em: ', ''); 
+          // "R$ 6.00)"
+          taxInfo = taxParts[1].replace(')', ''); // <-- Captura a taxa
+        }
+
+        // 5. Retorna o JSX formatado com as três linhas
+        return (
+          <div className="md:col-span-2 space-y-1">
+            <div className="flex items-start gap-2">
+              <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+              {/* Linha 1: Cidade e Bairro */}
+              <span className="text-sm font-medium">{cityBairro}</span>
+            </div>
+            
+            {/* NOVO: Linha 2 (Taxa) - só aparece se a taxa foi encontrada */}
+            {taxInfo && (
+              <div className="pl-6">
+                <span className="text-sm text-muted-foreground">(Taxa: {taxInfo})</span>
+              </div>
+            )}
+
+            {/* Linha 3: Rua, Número, etc. (Recuada) */}
+            <div className="pl-6">
+              <span className="text-sm text-muted-foreground">{streetPart}</span>
+            </div>
+          </div>
+        );
+      }
+    }
+    
+    // 6. Se não for o formato novo (ex: "Retirada no Local"), exibe como antes
+    return (
+      <div className="flex items-center gap-2 md:col-span-2">
+        <MapPin className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm">{endereco}</span>
+      </div>
+    );
+  }
+
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -241,7 +301,7 @@ const Orders = () => {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel disabled={resetting}>Cancelar</AlertDialogCancel>
-                {/* Chama handleResetOrders ao clicar */}
+         
                 <AlertDialogAction 
                   onClick={handleResetOrders} 
                   disabled={resetting}
@@ -257,7 +317,7 @@ const Orders = () => {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-          {/* --- Fim do Botão de Reset --- */}
+          
         </div>
 
         {loadingOrders ? (
@@ -272,12 +332,12 @@ const Orders = () => {
                   <div className="flex justify-between items-start">
                    <div>
                       <CardTitle className="text-lg">Pedido #{order.id}</CardTitle>
-                      {/* --- NOVO: HORA DO PEDIDO --- */}
+                    
                       <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                         <Clock className="h-4 w-4" />
                         <span>{formatOrderTime(order.created_at)}</span>
                       </div>
-                      {/* --- FIM HORA DO PEDIDO --- */}
+                     
                     </div>
                     
                     <Badge className={getStatusColor(order.status)}>
@@ -295,14 +355,11 @@ const Orders = () => {
                       <Phone className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm">{order.telefone}</span>
                     </div>
-                    <div className="flex items-center gap-2 md:col-span-2">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{order.endereco}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
+                    {renderAddress(order.endereco)}
+                {/* <div className="flex items-center gap-2">
                       <DollarSign className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-semibold">R$ {order.total}</span>
-                    </div>
+                    </div> */}
                     <div className="flex items-center gap-2">
                       <CreditCard className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm">{order.meio_pagamento}</span>
@@ -324,7 +381,7 @@ const Orders = () => {
                         {order.period === 'lunch' ? 'Almoço' : 'Jantar'}
                       </Badge>
                     </div>
-                    {/* --- FIM DO PERÍODO --- */}
+                 
                   
                  
 
@@ -355,6 +412,10 @@ const Orders = () => {
                         </li>
                       ))}
                     </ul>
+                    <div className="flex justify-between font-bold text-lg pt-2 border-t mt-2">
+                      <span>Total:</span>
+                      <span className="text-accent">R$ {order.total}</span>
+                    </div>
                   </div>
 
                   <div className="pt-4 border-t">
