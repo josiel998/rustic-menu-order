@@ -454,7 +454,7 @@ const Admin = () => {
         dataToSend.append('imagem', editImageFile); // O novo arquivo
         dataToSend.append('_method', 'PUT'); // Método para o Laravel (já que FormData só usa POST)
 
-        // 🟢 CORREÇÃO: Usar api.postFormData para uploads
+        
         pratoAtualizado = await api.postFormData<MenuItem>(endpoint, dataToSend, {
             requiresAuth: true,
         });
@@ -468,7 +468,7 @@ const Admin = () => {
           imagem_url: editFormData.imagem_url || null, 
         };
         
-        // 🟢 CORREÇÃO: Usar api.request para JSON (com PATCH)
+       
         pratoAtualizado = await api.request<MenuItem>(endpoint, {
             method: 'PATCH',
             body: JSON.stringify(dadosAtualizados),
@@ -476,11 +476,8 @@ const Admin = () => {
         });
       }
       
-      // --- SUCESSO (COMUM A AMBOS OS FLUXOS) ---
+      
 
-      // 🟢 CORREÇÃO 2: Atualizar o estado local imediatamente.
-      // Isso garante que a UI atualize, mesmo que o evento WebSocket
-      // seja 'toOthers()' e não chegue para este cliente.
       setMenuItems(pratosAtuais =>
         pratosAtuais.map(item => 
           item.id === pratoAtualizado.id ? pratoAtualizado : item

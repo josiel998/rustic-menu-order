@@ -125,11 +125,11 @@ const Orders = () => {
         echo.leave('admin-orders');
       };
     } else if (!authLoading && !isAuthenticated) {
-        // Isso não deve acontecer por causa do ProtectedRoute, mas é um bom log
+      
         console.warn('Orders.tsx: Carregado sem autenticação. Não vai se inscrever no Echo.');
     }
   
-    // 5. Adicione authLoading e isAuthenticated como dependências
+    
   }, [authLoading, isAuthenticated, toast]);
 
   const fetchOrders = async () => {

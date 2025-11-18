@@ -35,14 +35,14 @@ const api = { // Removida a palavra 'export' daqui
       throw new Error(error.message || `Erro ${response.status}`);
     }
 
-    // --- INÍCIO DA CORREÇÃO ---
+
     // Se a resposta FOR OK, verifique se é 204 (No Content)
     if (response.status === 204) {
       // Se for 204, a requisição foi um sucesso, mas não há corpo.
       // Retorne um objeto vazio ou um marcador de sucesso.
       return Promise.resolve({}) as Promise<T>;
     }
-    // --- FIM DA CORREÇÃO ---
+
 
     // Se for 200, 201, etc., prossiga normalmente.
     return response.json();
