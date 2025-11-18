@@ -14,6 +14,7 @@ interface MenuItemFromDB {
   nome: string;
   descricao: string;
   preco: string;
+  preco_pequeno?: string | null;
   category: string;
   period: "lunch" | "dinner";
   imagem_url?: string | null;
@@ -45,28 +46,34 @@ const Index = () => {
   const [menuItems, setMenuItems] = useState<MenuItemFromDB[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const [currentPeriod, setCurrentPeriod] = useState<"lunch" | "dinner">("lunch");
 
   const [cart, setCart] = useState<CartItem[]>([]);
 
 
-  const addToCart = (item: MenuItemFromDB) => {
-    const existing = cart.find(i => i.id === item.id);
+const addToCart = (item: MenuItemFromDB, selectedPrice: string, selectedName: string) => {
+    // Agora o ID do item do carrinho precisa ser ÚNICO, 
+    // mesmo que seja o mesmo prato, se o preço for diferente (Pequeno/Grande).
+    // Usaremos o ID do prato + o preço para garantir a unicidade no carrinho.
+    const cartItemId = `${item.id}-${selectedPrice}`; // Novo ID único
+
+    const existing = cart.find(i => i.id === cartItemId);
     
     if (existing) {
       setCart(cart.map(i => 
-        i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+        i.id === cartItemId ? { ...i, quantity: i.quantity + 1 } : i
       ));
     } else {
-      // Traduz de Português (DB) para Inglês (Cart)
+      // Cria o item do carrinho com o nome e preço selecionados
       const cartItem: CartItem = {
-        id: item.id,
-        name: item.nome,
-        price: item.preco,
+        id: cartItemId, // Usa o novo ID único
+        name: selectedName, // Usa o nome com o tamanho (ex: Feijoada (Pequeno))
+        price: selectedPrice, // Usa o preço selecionado
         quantity: 1,
       };
       setCart([...cart, cartItem]);
     }
-    toast({ title: "Item adicionado!", description: `${item.nome} foi para o carrinho.` });
+    toast({ title: "Item adicionado!", description: `${selectedName} foi para o carrinho.` });
   };
 
   const updateQuantity = (id: string, delta: number) => {
@@ -158,12 +165,16 @@ const Index = () => {
           <p className="text-center text-muted-foreground">Carregando cardápio...</p>
         ) : (
           <>
-            <Tabs defaultValue="lunch" className="w-full">
+           <Tabs 
+              value={currentPeriod} 
+              onValueChange={(v) => setCurrentPeriod(v as "lunch" | "dinner")} 
+              className="w-full"
+            >
               <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-12">
                 <TabsTrigger value="lunch" className="text-lg">Almoço</TabsTrigger>
                 <TabsTrigger value="dinner" className="text-lg">Jantar</TabsTrigger>
               </TabsList>
-              
+
              <TabsContent value="lunch">
                <div className="grid md:grid-cols-2 gap-6">
                   {/* MODIFICADO: Passamos o 'item' inteiro, que agora inclui 'imagem_url' */}
@@ -171,7 +182,7 @@ const Index = () => {
                     <MenuCard 
                       key={item.id} 
                       item={item} // Passa o objeto completo
-                      onAddToCart={() => addToCart(item)}
+                      onAddToCart={(selectedPrice, selectedName) => addToCart(item, selectedPrice, selectedName)}
                     />
                   ))}
                 </div>
@@ -185,7 +196,7 @@ const Index = () => {
                     <MenuCard 
                       key={item.id} 
                       item={item} // Passa o objeto completo
-                      onAddToCart={() => addToCart(item)}
+                      onAddToCart={(selectedPrice, selectedName) => addToCart(item, selectedPrice, selectedName)}
                     />
                   ))}
                 </div>
@@ -194,11 +205,12 @@ const Index = () => {
           <section className="py-12 mt-16">
               <div className="max-w-2xl mx-auto">
                 {/* MODIFICADO: Passa o carrinho e as funções de gerenciamento para o OrderForm */}
-                <OrderForm 
+               <OrderForm 
                   cart={cart}
                   onUpdateQuantity={updateQuantity}
                   onRemoveFromCart={removeFromCart}
                   onClearCart={clearCart}
+                  period={currentPeriod} // <-- NOVO
                 />
               </div>
             </section>
@@ -209,6 +221,12 @@ const Index = () => {
       {/* Footer (sem mudanças) */}
       <footer className="border-t bg-card mt-16">
         <div className="container mx-auto px-4 py-8 text-center text-muted-foreground">
+
+          <div className="mb-4">
+            <h4 className="font-semibold text-lg text-foreground mb-2">Contato</h4>
+            <p className="font-body text-base">+55 31 9585-6444</p>
+           
+          </div>
           <p className="font-body">© 2024 Restaurante Bom Sabor. Feito com carinho.</p>
         </div>
       </footer>

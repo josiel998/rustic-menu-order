@@ -51,7 +51,7 @@ const StatusPedido = () => {
 
     fetchOrderStatus();
     // 2. Se inscrever no canal do WebSocket (ex: 'order.UUID-DO-PEDIDO')
-    const channel = echo.channel(`order.${uuid}`);
+    const channel = echo.channel(`order.uuid.${uuid}`);
     
     // 3. Ouvir pelo evento 'OrderStatusUpdated' (o nome da sua classe de Evento)
     channel.listen('OrderStatusUpdated', (event: OrderStatusEvent) => {

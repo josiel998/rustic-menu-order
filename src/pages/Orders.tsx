@@ -5,8 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
-import { ShoppingBag, User, DollarSign, CreditCard, Phone, MapPin, RefreshCw, AlertTriangle, Loader2, Trash2 } from "lucide-react";
+import { ShoppingBag, User, DollarSign, CreditCard, Phone, MapPin, RefreshCw, AlertTriangle, Loader2, Trash2, StickyNote, Package, Clock, Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,47 +43,97 @@ interface Order {
   total: string;
   status: string;
   meio_pagamento: string;
+  tipo_entrega: string;      
+  observacoes: string | null;
+  period: "lunch" | "dinner";
   itens: OrderItem[];
   created_at: string;
+}
+
+interface PedidoCriadoEvent {
+  pedido: Order; // O evento vai trazer o objeto 'pedido' completo
 }
 
 const Orders = () => {
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingOrders, setLoadingOrders] = useState(true);
   const [resetting, setResetting] = useState(false);
+  const { loading: authLoading, isAuthenticated } = useAuth();
+
+
+  const formatOrderTime = (timestamp: string) => {
+    try {
+      return new Date(timestamp).toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return timestamp; // Retorna o original se falhar
+    }
+  };
 
   useEffect(() => {
+    // A busca de pedidos pode rodar sempre
     fetchOrders();
 
+    // SÓ TENTA SE CONECTAR AO WEBSOCKET SE:
+    // 1. A autenticação NÃO estiver carregando
+    // 2. O usuário ESTIVER autenticado
+    if (!authLoading && isAuthenticated) {
+      
+      // Agora este log deve funcionar
+      if (echo.options.auth && echo.options.auth.headers['Authorization']) {
+        console.log(
+          'Orders.tsx: Autenticação pronta. Conectando ao Echo com token.',
+        );
+      } else {
+        console.error('Orders.tsx: Autenticação pronta, MAS o token do Echo não foi definido! Verifique o AuthContext.');
+        return; // Não tenta se inscrever
+      }
 
-  const statusChannel = echo.private('admin-orders'); // Ou o canal que você usa
+      const statusChannel = echo.private('admin-orders');
     
-    statusChannel.listen('.OrderStatusUpdated', (event: OrderStatusEvent) => {
-      console.log('Orders.tsx ouviu OrderStatusUpdated', event);
-      setOrders(currentOrders => 
-        currentOrders.map(order => 
-          order.id === event.id ? { ...order, status: event.status } : order
-        )
-      );
-    });
+      statusChannel.listen('.OrderStatusUpdated', (event: OrderStatusEvent) => {
+        console.log('Orders.tsx ouviu OrderStatusUpdated', event);
+        setOrders(currentOrders => 
+          currentOrders.map(order => 
+            order.id === event.id ? { ...order, status: event.status } : order
+          )
+        );
+      });
+
+      statusChannel.listen('.PedidoCriado', (event: PedidoCriadoEvent) => {
+        console.log('Orders.tsx ouviu PedidoCriado', event);
+        
+        setOrders(currentOrders => [event.pedido, ...currentOrders]);
+
+        toast({
+          title: "Novo Pedido Recebido!",
+          description: `Pedido #${event.pedido.id} de ${event.pedido.cliente}.`,
+        });
+      });
+
+      // Função de limpeza
+      return () => {
+        console.log('Orders.tsx: Limpando e saindo do canal admin-orders');
+        statusChannel.stopListening('.OrderStatusUpdated');
+        statusChannel.stopListening('.PedidoCriado');
+        echo.leave('admin-orders');
+      };
+    } else if (!authLoading && !isAuthenticated) {
+      
+        console.warn('Orders.tsx: Carregado sem autenticação. Não vai se inscrever no Echo.');
+    }
+  
     
-    // (Opcional) Ouvir por um evento de reset global
-    // statusChannel.listen('.PedidosResetados', () => {
-    //   console.log('Orders.tsx ouviu PedidosResetados');
-    //   setOrders([]); // Limpa a lista local
-    //   toast({ title: "Pedidos Resetados", description: "A lista de pedidos foi limpa."});
-    // });
-
-    return () => {
-      statusChannel.stopListening('.OrderStatusUpdated');
-      // statusChannel.stopListening('.PedidosResetados');
-      echo.leave('admin-orders'); // Sai do canal
-    };
-
-  }, []);
+  }, [authLoading, isAuthenticated, toast]);
 
   const fetchOrders = async () => {
+    setLoadingOrders(true);
     try {
       const data = await api.request<Order[]>('/pedidos', { requiresAuth: true });
       setOrders(data);
@@ -93,7 +144,7 @@ const Orders = () => {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+     setLoadingOrders(false);
     }
   };
 
@@ -160,6 +211,66 @@ const Orders = () => {
     }
   };
 
+const renderAddress = (endereco: string) => {
+    // 1. Verifica se é o novo formato de entrega
+    if (endereco.startsWith('Entrega em:')) {
+      // 2. Tenta dividir a string no ponto "Endereço: "
+      const parts = endereco.split('. Endereço: ');
+      
+      // 3. Divide a primeira parte (Cidade/Bairro) da segunda (Rua)
+      if (parts.length === 2) {
+        
+        const mainPart = parts[0]; // "Entrega em: Mario Campos - Centro (Taxa: R$ 6.00)"
+        const streetPart = parts[1]; // "Rua das Flores, 123"
+
+        // 4. Divide a parte principal para extrair a taxa
+        const taxParts = mainPart.split(' (Taxa: ');
+        
+        let cityBairro = mainPart.replace('Entrega em: ', ''); // Fallback
+        let taxInfo = null; // Onde guardaremos a taxa
+
+        if (taxParts.length === 2) {
+          // "Entrega em: Mario Campos - Centro"
+          cityBairro = taxParts[0].replace('Entrega em: ', ''); 
+          // "R$ 6.00)"
+          taxInfo = taxParts[1].replace(')', ''); // <-- Captura a taxa
+        }
+
+        // 5. Retorna o JSX formatado com as três linhas
+        return (
+          <div className="md:col-span-2 space-y-1">
+            <div className="flex items-start gap-2">
+              <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+              {/* Linha 1: Cidade e Bairro */}
+              <span className="text-sm font-medium">{cityBairro}</span>
+            </div>
+            
+            {/* NOVO: Linha 2 (Taxa) - só aparece se a taxa foi encontrada */}
+            {taxInfo && (
+              <div className="pl-6">
+                <span className="text-sm text-muted-foreground">(Taxa: {taxInfo})</span>
+              </div>
+            )}
+
+            {/* Linha 3: Rua, Número, etc. (Recuada) */}
+            <div className="pl-6">
+              <span className="text-sm text-muted-foreground">{streetPart}</span>
+            </div>
+          </div>
+        );
+      }
+    }
+    
+    // 6. Se não for o formato novo (ex: "Retirada no Local"), exibe como antes
+    return (
+      <div className="flex items-center gap-2 md:col-span-2">
+        <MapPin className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm">{endereco}</span>
+      </div>
+    );
+  }
+
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -173,7 +284,7 @@ const Orders = () => {
           {/* --- NOVO: Botão de Reset com AlertDialog --- */}
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="destructive" disabled={loading || resetting}>
+              <Button variant="destructive" disabled={loadingOrders || resetting}>
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Resetar Pedidos
               </Button>
@@ -190,7 +301,7 @@ const Orders = () => {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel disabled={resetting}>Cancelar</AlertDialogCancel>
-                {/* Chama handleResetOrders ao clicar */}
+         
                 <AlertDialogAction 
                   onClick={handleResetOrders} 
                   disabled={resetting}
@@ -206,10 +317,10 @@ const Orders = () => {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-          {/* --- Fim do Botão de Reset --- */}
+          
         </div>
 
-        {loading ? (
+        {loadingOrders ? (
           <p className="text-center text-muted-foreground">Carregando pedidos...</p>
         ) : orders.length === 0 ? (
           <p className="text-center text-muted-foreground">Nenhum pedido encontrado</p>
@@ -219,14 +330,23 @@ const Orders = () => {
               <Card key={order.id} className="shadow-elevated animate-fade-in">
                 <CardHeader>
                   <div className="flex justify-between items-start">
-                    <CardTitle className="text-lg">Pedido #{order.id}</CardTitle>
+                   <div>
+                      <CardTitle className="text-lg">Pedido #{order.id}</CardTitle>
+                    
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                        <Clock className="h-4 w-4" />
+                        <span>{formatOrderTime(order.created_at)}</span>
+                      </div>
+                     
+                    </div>
+                    
                     <Badge className={getStatusColor(order.status)}>
                       {order.status}
                     </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-               <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid md:grid-cols-2 gap-4">
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm">{order.cliente}</span>
@@ -235,18 +355,48 @@ const Orders = () => {
                       <Phone className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm">{order.telefone}</span>
                     </div>
-                    <div className="flex items-center gap-2 md:col-span-2">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{order.endereco}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
+                    {renderAddress(order.endereco)}
+                {/* <div className="flex items-center gap-2">
                       <DollarSign className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-semibold">R$ {order.total}</span>
-                    </div>
+                    </div> */}
                     <div className="flex items-center gap-2">
                       <CreditCard className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm">{order.meio_pagamento}</span>
                     </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4 text-muted-foreground" />
+                      <Badge variant="outline" className="text-sm capitalize">
+                        {order.tipo_entrega}
+                      </Badge>
+                    </div>
+                  <div className="flex items-center gap-2">
+                      {order.period === 'lunch' ? (
+                        <Sun className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Moon className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <Badge variant="outline" className="text-sm capitalize">
+                        {order.period === 'lunch' ? 'Almoço' : 'Jantar'}
+                      </Badge>
+                    </div>
+                 
+                  
+                 
+
+                  {/* --- NOVO CAMPO DE OBSERVAÇÕES --- */}
+                  {order.observacoes && (
+                    <div className="pt-2 border-t">
+                      <h4 className="font-semibold mb-2 flex items-center gap-2">
+                        <StickyNote className="h-4 w-4" />
+                        Observações:
+                      </h4>
+                      <p className="text-sm text-muted-foreground italic">
+                        "{order.observacoes}"
+                      </p>
+                    </div>
+                  )}
                   </div>
 
                   <div>
@@ -262,6 +412,10 @@ const Orders = () => {
                         </li>
                       ))}
                     </ul>
+                    <div className="flex justify-between font-bold text-lg pt-2 border-t mt-2">
+                      <span>Total:</span>
+                      <span className="text-accent">R$ {order.total}</span>
+                    </div>
                   </div>
 
                   <div className="pt-4 border-t">

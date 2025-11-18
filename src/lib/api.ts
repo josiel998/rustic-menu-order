@@ -15,6 +15,8 @@ const api = { // Removida a palavra 'export' daqui
       ...fetchOptions.headers,
     };
 
+    
+
     if (requiresAuth) {
       const token = localStorage.getItem('auth_token');
       if (token) {
@@ -27,9 +29,56 @@ const api = { // Removida a palavra 'export' daqui
       headers,
     });
 
-    if (!response.ok) {
+ if (!response.ok) {
+      // Se a resposta NÃO for OK (404, 500, etc.), tente pegar o erro JSON
       const error = await response.json().catch(() => ({ message: 'Erro na requisição' }));
       throw new Error(error.message || `Erro ${response.status}`);
+    }
+
+
+    // Se a resposta FOR OK, verifique se é 204 (No Content)
+    if (response.status === 204) {
+      // Se for 204, a requisição foi um sucesso, mas não há corpo.
+      // Retorne um objeto vazio ou um marcador de sucesso.
+      return Promise.resolve({}) as Promise<T>;
+    }
+
+
+    // Se for 200, 201, etc., prossiga normalmente.
+    return response.json();
+  },
+
+  async postFormData<T>(endpoint: string, formData: FormData, options: ApiRequestOptions = {}): Promise<T> {
+    const { requiresAuth = false, ...fetchOptions } = options;
+
+    const headers: HeadersInit = {
+      'Accept': 'application/json',
+      // NÃO DEFINIMOS 'Content-Type'. O navegador faz isso para 'multipart/form-data'.
+      ...fetchOptions.headers,
+    };
+
+    if (requiresAuth) {
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    }
+    
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      ...fetchOptions,
+      method: 'POST', 
+      body: formData,
+      headers,
+    });
+
+    if (!response.ok) {
+      // Tenta extrair a mensagem de erro JSON (útil para erros de validação)
+      const error = await response.json().catch(() => ({ message: 'Erro na requisição ou arquivo grande demais' }));
+      throw new Error(error.message || `Erro ${response.status}`);
+    }
+    
+    if (response.status === 204) {
+      return Promise.resolve({}) as Promise<T>;
     }
 
     return response.json();
